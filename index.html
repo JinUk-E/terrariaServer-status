@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ToAniTalker 서버 상태</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans+KR:wght@400;600&family=IBM+Plex+Mono&display=swap">
+<style>
+  :root {
+    --ground: #eef2ea; --card: #ffffff; --ink: #1d2620; --muted: #5b6a5f; --line: #d4dccf;
+    --accent: #3f7d4e; --on: #23a645; --off: #d2453a; --stale: #9aa19b;
+    --on-glow: rgba(35, 166, 69, .35); --off-glow: rgba(210, 69, 58, .3);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #111712; --card: #19211b; --ink: #e5ece3; --muted: #95a496; --line: #2a352c;
+      --accent: #7cc28c; --on: #3fd065; --off: #f0675b; --stale: #6f786f;
+      --on-glow: rgba(63, 208, 101, .4); --off-glow: rgba(240, 103, 91, .35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #111712; --card: #19211b; --ink: #e5ece3; --muted: #95a496; --line: #2a352c;
+    --accent: #7cc28c; --on: #3fd065; --off: #f0675b; --stale: #6f786f;
+    --on-glow: rgba(63, 208, 101, .4); --off-glow: rgba(240, 103, 91, .35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 16px/1.6 "IBM Plex Sans KR", system-ui, -apple-system, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 56px; display: grid; gap: 20px; }
+  h1 {
+    font: 400 clamp(22px, 5vw, 30px)/1.2 "Silkscreen", "IBM Plex Mono", monospace;
+    margin: 0; letter-spacing: .02em; color: var(--accent);
+  }
+  .sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 20px; }
+  .status { display: flex; align-items: center; gap: 18px; }
+  .light {
+    flex: none; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--stale); box-shadow: 0 0 0 6px var(--line);
+  }
+  .light.on { background: var(--on); box-shadow: 0 0 0 6px var(--on-glow); animation: pulse 2.4s ease-in-out infinite; }
+  .light.off { background: var(--off); box-shadow: 0 0 0 6px var(--off-glow); }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 10px transparent; } }
+  @media (prefers-reduced-motion: reduce) { .light.on { animation: none; } }
+  .state { font-size: 22px; font-weight: 600; margin: 0; }
+  .state-note { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 20px; }
+  .fact { border-top: 1px solid var(--line); padding-top: 10px; }
+  .fact dt { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+  .fact dd { margin: 2px 0 0; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tabs { display: flex; gap: 8px; }
+  .tabs button {
+    font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--muted);
+  }
+  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--card); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .log {
+    margin: 12px 0 0; padding: 14px; list-style: none; max-height: 420px; overflow: auto;
+    border: 1px solid var(--line); border-radius: 4px; background: var(--ground);
+    font: 13px/1.7 "IBM Plex Mono", ui-monospace, monospace; display: grid; gap: 2px;
+  }
+  .log li { overflow-wrap: anywhere; }
+  .log .empty { color: var(--muted); }
+  .hint { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+  footer { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ToAniTalker</h1>
+    <p class="sub">테라리아 전문가 월드 · 서버 상태</p>
+  </header>
+
+  <section class="card" aria-live="polite">
+    <div class="status">
+      <span id="light" class="light" aria-hidden="true"></span>
+      <div>
+        <p id="state" class="state">불러오는 중…</p>
+        <p id="state-note" class="state-note"></p>
+      </div>
+    </div>
+    <dl class="facts">
+      <div class="fact"><dt>접속자</dt><dd id="players">–</dd></div>
+      <div class="fact"><dt>다음 정기 재시작</dt><dd id="next">–</dd></div>
+      <div class="fact"><dt>운영 종료까지</dt><dd id="final">–</dd></div>
+    </dl>
+  </section>
+
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-log="events">서버 이벤트</button>
+      <button role="tab" aria-selected="false" data-log="maintenance">운영 기록</button>
+    </div>
+    <ul id="log" class="log"><li class="empty">불러오는 중…</li></ul>
+    <p id="log-hint" class="hint">입장·퇴장, 서버 공지, 시작·백업 기록입니다. 채팅과 접속 정보는 공개하지 않습니다.</p>
+  </section>
+
+  <footer id="updated">마지막 갱신: –</footer>
+</main>
+<script>
+  const SOURCE = "https://raw.githubusercontent.com/JinUk-E/terrariaServer-status/data/status.json";
+  const STALE_MINUTES = 15;
+  const HINTS = {
+    events: "입장·퇴장, 서버 공지, 시작·백업 기록입니다. 채팅과 접속 정보는 공개하지 않습니다.",
+    maintenance: "정기 재시작·운영 스크립트 기록입니다.",
+  };
+  let data = null;
+  let view = "events";
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul", month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit",
+  });
+
+  function until(iso) {
+    const ms = new Date(iso) - Date.now();
+    if (ms <= 0) return "종료됨";
+    const h = Math.floor(ms / 3600000), d = Math.floor(h / 24);
+    return d > 0 ? `${d}일 ${h % 24}시간` : `${h}시간 ${Math.floor(ms / 60000) % 60}분`;
+  }
+
+  function renderStatus() {
+    const minutes = (Date.now() - new Date(data.updated_at)) / 60000;
+    const stale = minutes > STALE_MINUTES;
+    const [cls, label, note] =
+      data.state === "ended" ? ["off", "운영 종료", "함께해 주셔서 감사합니다."] :
+      stale ? ["", "상태 확인 불가", `${Math.round(minutes)}분째 갱신이 없습니다. 서버 컴퓨터가 꺼졌을 수 있어요.`] :
+      data.state === "running" ? ["on", "운영 중", "지금 접속할 수 있어요."] :
+      ["off", "꺼짐", "서버가 멈춰 있습니다."];
+    $("light").className = `light ${cls}`;
+    $("state").textContent = label;
+    $("state-note").textContent = note;
+    $("players").textContent = data.state === "running" && !stale && data.players != null ? `${data.players}명` : "–";
+    $("next").textContent = data.next_restart ? fmt.format(new Date(data.next_restart)) : "없음";
+    $("final").textContent = until(data.final_shutdown);
+    $("updated").textContent = `마지막 갱신: ${fmt.format(new Date(data.updated_at))} · 5분마다 갱신`;
+  }
+
+  function renderLog() {
+    const lines = (data && data[view]) || [];
+    const list = $("log");
+    list.replaceChildren(...(lines.length ? [...lines].reverse() : ["기록이 없습니다."]).map((text) => {
+      const li = document.createElement("li");
+      li.textContent = text;
+      if (!lines.length) li.className = "empty";
+      return li;
+    }));
+    $("log-hint").textContent = HINTS[view] + " 최신 기록이 위에 있습니다.";
+  }
+
+  async function load() {
+    try {
+      const response = await fetch(`${SOURCE}?t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(response.status);
+      data = await response.json();
+      renderStatus();
+      renderLog();
+    } catch {
+      $("light").className = "light";
+      $("state").textContent = "상태를 불러오지 못했습니다";
+      $("state-note").textContent = "잠시 후 자동으로 다시 시도합니다.";
+    }
+  }
+
+  document.querySelectorAll(".tabs button").forEach((button) => {
+    button.addEventListener("click", () => {
+      view = button.dataset.log;
+      document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b === button)));
+      renderLog();
+    });
+  });
+
+  load();
+  setInterval(load, 60000);
+</script>
+</body>
+</html>
